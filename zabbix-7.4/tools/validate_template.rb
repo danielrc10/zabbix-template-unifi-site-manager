@@ -148,8 +148,10 @@ items.each do |item|
   end
 end
 
-node = `command -v node`.strip
-unless node.empty?
+node = ENV.fetch('PATH', '').split(File::PATH_SEPARATOR)
+  .map { |directory| File.join(directory, 'node') }
+  .find { |candidate| File.file?(candidate) && File.executable?(candidate) }
+if node
   javascript.each do |label, code|
     Tempfile.create(['unifi-js-', '.js']) do |file|
       file.write("function zabbixCheck(value) {\n#{code}\n}\n")
