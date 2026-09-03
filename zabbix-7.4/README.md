@@ -112,8 +112,8 @@ Também é recomendável criar alarmes de orçamento PoE, capacidade total do NV
 ### Validação
 
 ```bash
-ruby templates/unifi-site-manager/zabbix-7.4/tools/generate_template.rb
-ruby templates/unifi-site-manager/zabbix-7.4/tools/validate_template.rb
+ruby zabbix-7.4/tools/generate_template.rb
+ruby zabbix-7.4/tools/validate_template.rb
 ```
 
 O validador confere YAML, UUIDs, macros, masters dependentes, TLS, HTTP Agents, dez LLDs obrigatórias, prioridades e sintaxe JavaScript. A validação definitiva continua sendo importar o arquivo em uma instalação de homologação com o mesmo patch do Zabbix 7.4 usado em produção e testar com uma API key de leitura.

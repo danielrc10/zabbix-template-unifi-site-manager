@@ -1,0 +1,27 @@
+# PT-BR: Validação contínua do template UniFi Site Manager.
+# EN: Continuous validation of the UniFi Site Manager template.
+
+name: Validar template / Validate template
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: UniFi Site Manager — Zabbix 7.4
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter código / Check out code
+        uses: actions/checkout@v5
+      - name: Gerar e validar / Generate and validate
+        run: |
+          ruby zabbix-7.4/tools/generate_template.rb
+          git diff --exit-code -- \
+            zabbix-7.4/template/template_unifi_site_manager.yaml \
+            zabbix-7.4/javascript/site_discovery.js
+          ruby zabbix-7.4/tools/validate_template.rb
+          node zabbix-7.4/tools/test_site_discovery.js

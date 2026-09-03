@@ -1,5 +1,10 @@
 # UniFi Site Manager, Network e Protect / UniFi Site Manager, Network and Protect
 
+[![Validar / Validate](https://github.com/danielrc10/zabbix-template-unifi-site-manager/actions/workflows/validate.yml/badge.svg)](https://github.com/danielrc10/zabbix-template-unifi-site-manager/actions/workflows/validate.yml)
+[![Licença / License: PolyForm NC 1.0.0](https://img.shields.io/badge/licen%C3%A7a-PolyForm%20NC%201.0.0-blue.svg)](LICENSE)
+
+[Catálogo Projetos Zabbix](https://github.com/danielrc10/projetos-zabbix)
+
 [Português](#português) · [English](#english)
 
 ## Português

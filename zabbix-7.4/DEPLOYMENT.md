@@ -14,14 +14,14 @@
 ### Instalação
 
 ```bash
-git clone https://github.com/danielrc10/zabbix.git /opt/zabbix-community
-cd /opt/zabbix-community
-ruby templates/unifi-site-manager/zabbix-7.4/tools/validate_template.rb
+git clone https://github.com/danielrc10/zabbix-template-unifi-site-manager.git /opt/zabbix-template-unifi-site-manager
+cd /opt/zabbix-template-unifi-site-manager
+ruby zabbix-7.4/tools/validate_template.rb
 ```
 
 Na GUI do Zabbix:
 
-1. Importe `templates/unifi-site-manager/zabbix-7.4/template/template_unifi_site_manager.yaml`.
+1. Importe `zabbix-7.4/template/template_unifi_site_manager.yaml`.
 2. Crie um host lógico sem interface.
 3. Vincule `Template UniFi Site Manager by HTTP`.
 4. Defina `{$UNIFI.API.KEY}` no host como **Texto secreto**.
