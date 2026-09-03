@@ -140,6 +140,17 @@ required_trigger_fragments.each do |fragment, priority|
 end
 check(template['description'].include?('BGP/OSPF'), 'official API capability limitations are not documented')
 
+site_lld = rules.find { |rule| rule['key'] == 'unifi.sites.discovery' }
+site_availability = site_lld && Array(site_lld['item_prototypes']).find { |item| item['key'] == 'unifi.site.online[{#SITE.ID}]' }
+check(site_availability, 'site console availability item prototype is missing')
+check(site_availability.dig('master_item', 'key') == 'unifi.sm.hosts.raw', 'site availability must derive from /v1/hosts console state') if site_availability
+site_availability_js = Array(site_availability && site_availability['preprocessing']).map { |step| Array(step['parameters']).join("\n") }.join("\n")
+check(site_availability_js.include?('{#HOST.ID}') && site_availability_js.include?('reportedState'), 'site availability must correlate hostId and reportedState')
+check(!site_availability_js.include?('offlineDevice'), 'site availability must not be inferred from offline device counts')
+check(!site_availability_js.include?('/connected/i'), 'console-state matching must not treat "disconnected" as "connected"')
+site_offline_trigger = Array(site_availability && site_availability['trigger_prototypes']).find { |trigger| trigger['name'].include?('console is offline') }
+check(site_offline_trigger && site_offline_trigger['expression'].include?('count(') && site_offline_trigger['expression'].include?('#2'), 'site-offline alert must require two consecutive disconnected samples')
+
 javascript = []
 rules.each { |rule| javascript << [rule['key'], rule['params']] if rule['type'] == 'SCRIPT' }
 items.each do |item|

@@ -521,9 +521,8 @@ console_item_prototypes << dependent_item(
     var id = '{#HOST.ID}';
     for (var i = 0; i < hosts.length; i++) {
         if (String(hosts[i].id) !== id) continue;
-        if (hosts[i].isBlocked === true) return 0;
         var state = hosts[i].reportedState && hosts[i].reportedState.state;
-        if (state) return /connected/i.test(String(state)) ? 1 : 0;
+        if (state) return String(state).toLowerCase() === 'connected' ? 1 : 0;
         var members = hosts[i].userData && Array.isArray(hosts[i].userData.consoleGroupMembers) ? hosts[i].userData.consoleGroupMembers : [];
         if (members.length && members[0].roleAttributes) return String(members[0].roleAttributes.connectedState) === 'CONNECTED' ? 1 : 0;
         return 2;
@@ -534,10 +533,10 @@ console_item_prototypes << dependent_item(
   triggers: [
     trigger(
       seed: 'trigger-console-offline',
-      expression: 'max(/Template UniFi Site Manager by HTTP/unifi.console.cloud.state[{#HOST.ID}],5m)=0',
-      name: '[High] UniFi console {#HOST.NAME} is offline for more than 5 minutes',
+      expression: 'count(/Template UniFi Site Manager by HTTP/unifi.console.cloud.state[{#HOST.ID}],#2,"eq",0)=2',
+      name: '[High] UniFi console {#HOST.NAME} is offline for two consecutive checks',
       priority: 'HIGH',
-      description: 'The console is disconnected from UniFi cloud or remote access is blocked.',
+      description: 'The console has reported a disconnected cloud state in two consecutive collections. A powered-off UCG/console is detected here. Remote-access blocking is monitored separately.',
       opdata: 'Host ID: {#HOST.ID}',
       tags: {'console' => '{#HOST.NAME}'}
     )
@@ -758,31 +757,31 @@ site_item_prototypes << site_health
 
 site_online = dependent_item(
   seed: 'site-online',
-  name: '[{#SITE.NAME}] Site: Availability',
+  name: '[{#SITE.NAME}] Site: Console availability',
   key: 'unifi.site.online[{#SITE.ID}]',
-  master: 'unifi.sm.sites.raw',
+  master: 'unifi.sm.hosts.raw',
   preprocessing: js(<<~'JS'),
     var payload = JSON.parse(value);
-    var sites = Array.isArray(payload.data) ? payload.data : [];
-    for (var i = 0; i < sites.length; i++) {
-        if (String(sites[i].siteId || sites[i].id) !== '{#SITE.ID}') continue;
-        var counts = sites[i].statistics && sites[i].statistics.counts ? sites[i].statistics.counts : {};
-        var total = Number(counts.totalDevice || 0);
-        var offline = Number(counts.offlineDevice || 0);
-        if (total <= 0) return 2;
-        return offline >= total ? 0 : 1;
+    var hosts = Array.isArray(payload.data) ? payload.data : [];
+    for (var i = 0; i < hosts.length; i++) {
+        if (String(hosts[i].id) !== '{#HOST.ID}') continue;
+        var state = hosts[i].reportedState && hosts[i].reportedState.state;
+        if (state) return String(state).toLowerCase() === 'connected' ? 1 : 0;
+        var members = hosts[i].userData && Array.isArray(hosts[i].userData.consoleGroupMembers) ? hosts[i].userData.consoleGroupMembers : [];
+        if (members.length && members[0].roleAttributes) return String(members[0].roleAttributes.connectedState) === 'CONNECTED' ? 1 : 0;
+        return 2;
     }
-    throw 'Site was not found in /v1/sites.';
+    throw 'Console {#HOST.ID} associated with site {#SITE.ID} was not found in /v1/hosts.';
   JS
   item_tags: tags('Site', 'site' => '{#SITE.NAME}'),
   triggers: [
     trigger(
       seed: 'trigger-site-offline',
-      expression: 'last(/Template UniFi Site Manager by HTTP/unifi.site.online[{#SITE.ID}])=0 and min(/Template UniFi Site Manager by HTTP/unifi.site.online[{#SITE.ID}],5m)=0',
-      name: '[High] UniFi site {#SITE.NAME} is offline',
+      expression: 'count(/Template UniFi Site Manager by HTTP/unifi.site.online[{#SITE.ID}],#2,"eq",0)=2',
+      name: '[High] UniFi site {#SITE.NAME} console is offline',
       priority: 'HIGH',
-      description: 'All devices reported for this site have been offline for at least five minutes.',
-      opdata: 'Site type: {#SITE.TYPE}; Site ID: {#SITE.ID}',
+      description: 'The UCG/console associated with this site has reported a disconnected cloud state in two consecutive collections. This detects a powered-off or disconnected console and is not inferred from device counts.',
+      opdata: 'Console: {#HOST.ID}; site type: {#SITE.TYPE}; site ID: {#SITE.ID}',
       tags: {'site' => '{#SITE.NAME}'}
     )
   ]
@@ -2468,7 +2467,7 @@ template = {
     Network/Protect entities. Alerts are emitted only when the official response contains the
     required evidence; unavailable official capabilities never produce a fabricated healthy value.
   DESC
-  'vendor' => {'name' => 'Daniel Carvalho', 'version' => '7.4-1'},
+  'vendor' => {'name' => 'Daniel Carvalho', 'version' => '7.4-2'},
   'groups' => [{'name' => 'Templates/Applications'}],
   'items' => account_items,
   'discovery_rules' => [

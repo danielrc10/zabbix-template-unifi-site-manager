@@ -73,17 +73,27 @@ A LLD de Sites correlaciona o inventário global com os IDs UUID locais do Netwo
 | Área | Coletado agora | Condicional/limitação oficial |
 |---|---|---|
 | API e consoles | HTTP/API, ausência de dados, bloqueio remoto, conexão do console, Network/Protect API | Aplicação só é alarmada se o console a anunciar |
-| Sites | total/offline de dispositivos, clientes, updates e notificações críticas | “Site offline” é derivado quando todos os dispositivos estão offline |
+| Sites | disponibilidade do UCG/console associado, total/offline de dispositivos, clientes, updates e notificações críticas | “Site offline” segue o estado de conexão do console em `/v1/hosts`; não é inferido pela contagem de dispositivos |
 | Dispositivos | online, uptime, CPU, RAM, firmware, clientes por uplink/AP | temperatura e USP-RPS não fazem parte do schema garantido |
 | Switch | link, velocidade, velocidade máxima, capacidade/estado PoE | nome configurado, VLAN operacional e watts não são garantidos |
 | Protect | conexão da câmera | stream loss separado, gravação ativa/modo, discos, SMART e RAID não são publicados |
 | WAN/ISP | interfaces, uptime/downtime agregado, latência, perda e throughput | IP público, prioridade ativa e Speedtest interno não são publicados |
 | Segurança | total e hash canônico das regras ACL oficiais | não abrange famílias legadas de regras que não estão no endpoint ACL |
-| DHCP | range configurado e ocupação estimada por clientes conectados | não existe endpoint oficial de leases; o item é identificado como estimativa |
+| DHCP | range configurado e percentual de endereços atualmente observados nos clientes conectados | não é a tabela de leases: clientes desconectados com lease válido não aparecem e IPs estáticos podem aparecer; por isso o valor é uma estimativa |
 | Wi-Fi | SSIDs, rádios, TX retries e clientes por uplink/AP | SSID/banda por cliente, experience e airtime não são publicados |
-| BGP/OSPF | LLD desabilitada e explicitamente vazia | não existe endpoint oficial para peers, flaps ou rotas |
+| BGP/OSPF | não monitorado pela API oficial; a LLD obrigatória permanece desabilitada e não descobre entidades | a API Network publicada não oferece endpoint de vizinhos, estado de adjacência, flaps ou contagem de rotas |
 
 Campos condicionais usam pré-processamento que gera estado `unsupported` quando ausentes. Isso é deliberado: retornar zero criaria falsos alarmes ou, pior, falsa saúde.
+
+#### Como interpretar o DHCP estimado
+
+O endpoint oficial lista **clientes conectados**, não todos os leases concedidos pelo servidor DHCP. O template cruza os IPs desses clientes com o início e o fim do pool. Por exemplo: em um pool com 101 endereços, se 30 endereços forem vistos entre os clientes conectados, o item mostrará aproximadamente `29,7%`.
+
+Esse número não é a ocupação real do servidor DHCP: um notebook desligado ainda pode conservar um lease válido e não aparecer na lista; um cliente com IP estático dentro do intervalo pode aparecer sem consumir lease. Consequentemente, o alerta ajuda a indicar concentração de clientes ativos, mas pode não detectar a exaustão real do pool. A medição exata exige uma tabela de leases que a API oficial publicada atualmente não oferece.
+
+#### O que significa a LLD de BGP/OSPF desabilitada
+
+Ela não realiza coleta nem cria itens para peers. Foi mantida somente para deixar explícita a LLD exigida no escopo original, sem fingir que há cobertura. A API Network oficial publicada atualmente não disponibiliza vizinhos BGP/OSPF, estado de adjacência, flaps ou quantidade de rotas. Para monitorar esses dados de verdade é necessário acrescentar outra fonte, como coleta local/SSH no gateway ou telemetria externa; isso fica fora da solução baseada exclusivamente na API oficial do Site Manager.
 
 ### Alertas adicionais recomendados e incluídos
 
@@ -91,7 +101,7 @@ Campos condicionais usam pré-processamento que gera estado `unsupported` quando
 - console desconectado ou com acesso remoto bloqueado;
 - backup do console antigo quando `latestBackupTime` estiver disponível;
 - Network/Protect inacessível por console;
-- site integralmente offline;
+- UCG/console associado ao site desconectado por duas coletas consecutivas (por exemplo, desligado da tomada);
 - notificações críticas abertas;
 - alteração canônica de ACL/firewall;
 - dispositivos offline, reboot e firmware pendente;

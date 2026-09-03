@@ -36,7 +36,7 @@ zabbix_export:
       required evidence; unavailable official capabilities never produce a fabricated healthy value.
     vendor:
       name: Daniel Carvalho
-      version: 7.4-1
+      version: 7.4-2
     groups:
     - name: Templates/Applications
     items:
@@ -375,9 +375,8 @@ zabbix_export:
             var id = '{#HOST.ID}';
             for (var i = 0; i < hosts.length; i++) {
                 if (String(hosts[i].id) !== id) continue;
-                if (hosts[i].isBlocked === true) return 0;
                 var state = hosts[i].reportedState && hosts[i].reportedState.state;
-                if (state) return /connected/i.test(String(state)) ? 1 : 0;
+                if (state) return String(state).toLowerCase() === 'connected' ? 1 : 0;
                 var members = hosts[i].userData && Array.isArray(hosts[i].userData.consoleGroupMembers) ? hosts[i].userData.consoleGroupMembers : [];
                 if (members.length && members[0].roleAttributes) return String(members[0].roleAttributes.connectedState) === 'CONNECTED' ? 1 : 0;
                 return 2;
@@ -393,11 +392,13 @@ zabbix_export:
         trends: 365d
         trigger_prototypes:
         - uuid: ab918cf4eabb43898514ac4ab8a5407d
-          expression: max(/Template UniFi Site Manager by HTTP/unifi.console.cloud.state[{#HOST.ID}],5m)=0
-          name: "[High] UniFi console {#HOST.NAME} is offline for more than 5 minutes"
+          expression: count(/Template UniFi Site Manager by HTTP/unifi.console.cloud.state[{#HOST.ID}],#2,"eq",0)=2
+          name: "[High] UniFi console {#HOST.NAME} is offline for two consecutive
+            checks"
           priority: HIGH
-          description: The console is disconnected from UniFi cloud or remote access
-            is blocked.
+          description: The console has reported a disconnected cloud state in two
+            consecutive collections. A powered-off UCG/console is detected here. Remote-access
+            blocking is monitored separately.
           tags:
           - tag: scope
             value: availability
@@ -1252,7 +1253,7 @@ zabbix_export:
         valuemap:
           name: UniFi availability
       - uuid: 1523442daad443168a2fa52a32cd1c65
-        name: "[{#SITE.NAME}] Site: Availability"
+        name: "[{#SITE.NAME}] Site: Console availability"
         type: DEPENDENT
         key: unifi.site.online[{#SITE.ID}]
         history: 90d
@@ -1262,18 +1263,18 @@ zabbix_export:
           parameters:
           - |
             var payload = JSON.parse(value);
-            var sites = Array.isArray(payload.data) ? payload.data : [];
-            for (var i = 0; i < sites.length; i++) {
-                if (String(sites[i].siteId || sites[i].id) !== '{#SITE.ID}') continue;
-                var counts = sites[i].statistics && sites[i].statistics.counts ? sites[i].statistics.counts : {};
-                var total = Number(counts.totalDevice || 0);
-                var offline = Number(counts.offlineDevice || 0);
-                if (total <= 0) return 2;
-                return offline >= total ? 0 : 1;
+            var hosts = Array.isArray(payload.data) ? payload.data : [];
+            for (var i = 0; i < hosts.length; i++) {
+                if (String(hosts[i].id) !== '{#HOST.ID}') continue;
+                var state = hosts[i].reportedState && hosts[i].reportedState.state;
+                if (state) return String(state).toLowerCase() === 'connected' ? 1 : 0;
+                var members = hosts[i].userData && Array.isArray(hosts[i].userData.consoleGroupMembers) ? hosts[i].userData.consoleGroupMembers : [];
+                if (members.length && members[0].roleAttributes) return String(members[0].roleAttributes.connectedState) === 'CONNECTED' ? 1 : 0;
+                return 2;
             }
-            throw 'Site was not found in /v1/sites.';
+            throw 'Console {#HOST.ID} associated with site {#SITE.ID} was not found in /v1/hosts.';
         master_item:
-          key: unifi.sm.sites.raw
+          key: unifi.sm.hosts.raw
         tags:
         - tag: component
           value: Site
@@ -1282,18 +1283,18 @@ zabbix_export:
         trends: 365d
         trigger_prototypes:
         - uuid: b8ed30029d2b48e98aca85e3d74382b6
-          expression: last(/Template UniFi Site Manager by HTTP/unifi.site.online[{#SITE.ID}])=0
-            and min(/Template UniFi Site Manager by HTTP/unifi.site.online[{#SITE.ID}],5m)=0
-          name: "[High] UniFi site {#SITE.NAME} is offline"
+          expression: count(/Template UniFi Site Manager by HTTP/unifi.site.online[{#SITE.ID}],#2,"eq",0)=2
+          name: "[High] UniFi site {#SITE.NAME} console is offline"
           priority: HIGH
-          description: All devices reported for this site have been offline for at
-            least five minutes.
+          description: The UCG/console associated with this site has reported a disconnected
+            cloud state in two consecutive collections. This detects a powered-off
+            or disconnected console and is not inferred from device counts.
           tags:
           - tag: scope
             value: availability
           - tag: site
             value: "{#SITE.NAME}"
-          opdata: 'Site type: {#SITE.TYPE}; Site ID: {#SITE.ID}'
+          opdata: 'Console: {#HOST.ID}; site type: {#SITE.TYPE}; site ID: {#SITE.ID}'
         valuemap:
           name: UniFi availability
       - uuid: 3be38feeb7ad40ec8624bf685d279c2b
