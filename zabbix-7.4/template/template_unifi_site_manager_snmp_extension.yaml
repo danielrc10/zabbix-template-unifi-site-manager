@@ -185,9 +185,7 @@ zabbix_export:
       preprocessing:
       - type: JAVASCRIPT
         parameters:
-        - 'return Number(value) === 1 ? 1 : 0;
-
-'
+        - 'return Number(value) === 1 ? 1 : 0;'
       valuemap:
         name: Boolean
       triggers:
@@ -633,9 +631,7 @@ zabbix_export:
         preprocessing:
         - type: JAVASCRIPT
           parameters:
-          - 'return Number(value) === 1 ? 1 : 0;
-
-'
+          - 'return Number(value) === 1 ? 1 : 0;'
         valuemap:
           name: Boolean
       - uuid: 8e618d8c7cf842c985547ced17fdfef7

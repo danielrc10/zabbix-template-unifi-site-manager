@@ -156,7 +156,7 @@ isolated = snmp_item(
   description: 'UI-MIB TruthValue normalized to 1 when the access point is isolated.',
   item_tags: tags('Health', 'scope' => 'snmp-extension')
 )
-isolated['preprocessing'] = preprocessing('JAVASCRIPT', "return Number(value) === 1 ? 1 : 0;\n")
+isolated['preprocessing'] = preprocessing('JAVASCRIPT', 'return Number(value) === 1 ? 1 : 0;')
 isolated['valuemap'] = {'name' => 'Boolean'}
 isolated['triggers'] = [
   trigger(
@@ -327,7 +327,7 @@ vap_items = []
   ['vap-ccq', 'Client connection quality', 'ccq', '3', '%', nil],
   ['vap-channel', 'Channel', 'channel', '4', nil, nil],
   ['vap-tx-power', 'Transmit power', 'tx.power', '21', 'dBm', nil],
-  ['vap-up', 'Operational state', 'up', '22', nil, "return Number(value) === 1 ? 1 : 0;\n"]
+  ['vap-up', 'Operational state', 'up', '22', nil, 'return Number(value) === 1 ? 1 : 0;']
 ].each do |seed, label, suffix, column, units, javascript|
   steps = javascript ? preprocessing('JAVASCRIPT', javascript) : []
   item = snmp_prototype(
