@@ -1288,7 +1288,10 @@ voucher_metrics.each do |slug, label, field|
     name: "[{#SITE.NAME}] Hotspot: #{label}",
     key: "unifi.site.vouchers.#{slug}[{#NETWORK.SITE.ID}]",
     master: voucher_master,
-    preprocessing: js("var summary = JSON.parse(value); return Number(summary.#{field});"),
+    preprocessing: js(<<~JS),
+      var summary = JSON.parse(value);
+      return Number(summary.#{field});
+    JS
     item_tags: tags('Hotspot', 'site' => '{#SITE.NAME}', 'application' => 'Network'),
     triggers: voucher_triggers
   )
