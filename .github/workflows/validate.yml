@@ -20,8 +20,11 @@ jobs:
       - name: Gerar e validar / Generate and validate
         run: |
           ruby zabbix-7.4/tools/generate_template.rb
+          ruby zabbix-7.4/tools/generate_snmp_extension.rb
           git diff --exit-code -- \
             zabbix-7.4/template/template_unifi_site_manager.yaml \
+            zabbix-7.4/template/template_unifi_site_manager_snmp_extension.yaml \
             zabbix-7.4/javascript/site_discovery.js
           ruby zabbix-7.4/tools/validate_template.rb
+          ruby zabbix-7.4/tools/validate_snmp_extension.rb
           node zabbix-7.4/tools/test_site_discovery.js

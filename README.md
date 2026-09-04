@@ -9,24 +9,24 @@
 
 ## Português
 
-Template avançado para monitoramento centralizado de contas UniFi no Zabbix por meio da API oficial `https://api.ui.com`. A solução combina itens HTTP Agent assíncronos com LLD em JavaScript para descobrir consoles, sites, dispositivos Network, portas, câmeras Protect, WANs, redes/DHCP, SSIDs e rádios.
+Projeto API-first para monitoramento centralizado de contas UniFi no Zabbix por meio da API oficial `https://api.ui.com`. O template principal funciona remotamente sem VPN ou Zabbix Proxy no site. Uma extensão SNMP opcional acrescenta telemetria local de interfaces, rádios e VAPs, mas nunca substitui a API.
 
 ### Versões
 
 | Zabbix | Estado | Arquivos |
 |---|---|---|
-| 7.4+ | Validado estruturalmente | [Abrir versão 7.4](zabbix-7.4/README.md) |
+| 7.4+ | Template principal `1.1.0` + SNMP Extension `1.0.0` | [Abrir versão 7.4](zabbix-7.4/README.md) |
 
 O template diferencia dado oficial disponível, dado condicional e capacidade ainda ausente da API. Uma métrica ausente nunca é convertida em um falso estado saudável.
 
 ## English
 
-Advanced Zabbix template for centralized monitoring of UniFi accounts through the official `https://api.ui.com` API. It combines asynchronous HTTP Agent items with JavaScript LLD to discover consoles, sites, Network devices, ports, Protect cameras, WANs, networks/DHCP, SSIDs, and radios.
+API-first Zabbix project for centralized UniFi monitoring through the official `https://api.ui.com` API. The primary template works remotely without a site VPN or Zabbix Proxy. An optional SNMP extension adds local interface, radio, and VAP telemetry but never replaces the API.
 
 ### Versions
 
 | Zabbix | Status | Files |
 |---|---|---|
-| 7.4+ | Structurally validated | [Open version 7.4](zabbix-7.4/README.md#english) |
+| 7.4+ | Primary template `1.1.0` + SNMP Extension `1.0.0` | [Open version 7.4](zabbix-7.4/README.md#english) |
 
 The template distinguishes available official data, conditional fields, and capabilities not yet exposed by the API. A missing metric is never converted into a fabricated healthy state.

@@ -33,8 +33,9 @@ root = data.fetch('zabbix_export')
 check(root['version'] == '7.4', 'export version must be 7.4')
 check(root.fetch('templates').length == 1, 'exactly one template is expected')
 template = root.fetch('templates').first
-template_name = 'Template UniFi Site Manager by HTTP'
+template_name = 'Template UniFi Site Manager'
 check(template['template'] == template_name, 'unexpected technical template name')
+check(template.dig('vendor', 'version').match?(/\A\d+\.\d+\.\d+\z/), 'template vendor version must use semantic versioning')
 
 all_objects = []
 collect = lambda do |value|
@@ -67,11 +68,20 @@ required_rules = {
   'LLD - AP radios' => %w[{#AP.MAC} {#RADIO.BAND}]
 }
 
+additional_api_rules = {
+  'LLD - Protect sensors' => %w[{#SENSOR.ID} {#SENSOR.NAME} {#SENSOR.MODEL} {#SENSOR.SITE.ID}],
+  'LLD - Protect Alarm Hubs' => %w[{#ALARM.HUB.ID} {#ALARM.HUB.NAME} {#ALARM.HUB.MODEL} {#ALARM.HUB.SITE.ID}]
+}
+required_rules.merge!(additional_api_rules)
+
 required_rules.each do |name, required_macros|
   rule = rules.find { |candidate| candidate['name'] == name }
   check(rule, "missing discovery rule #{name}")
   paths = rule.fetch('lld_macro_paths').map { |entry| entry.fetch('lld_macro') }
   required_macros.each { |macro| check(paths.include?(macro), "#{name} is missing #{macro}") }
+  next if rule['key'] == 'unifi.routing.discovery'
+  check(rule['type'] == 'DEPENDENT', "#{name} must reuse the unified inventory")
+  check(rule.dig('master_item', 'key') == 'unifi.inventory.raw', "#{name} does not use unifi.inventory.raw")
 end
 
 check(rules.find { |rule| rule['key'] == 'unifi.routing.discovery' }['status'] == 'DISABLED',
@@ -95,10 +105,20 @@ items.select { |item| item['type'] == 'DEPENDENT' }.each do |item|
   master = item.fetch('master_item').fetch('key')
   check(keys.include?(master), "dependent item #{item['key']} references missing master #{master}")
 end
+rules.select { |rule| rule['type'] == 'DEPENDENT' }.each do |rule|
+  master = rule.fetch('master_item').fetch('key')
+  check(keys.include?(master), "dependent discovery #{rule['key']} references missing master #{master}")
+end
 
 macro_names = template.fetch('macros').map { |macro| macro.fetch('macro') }
 required_macros = %w[
   {$UNIFI.API.KEY}
+  {$UNIFI.INTERVAL.AVAILABILITY}
+  {$UNIFI.INTERVAL.STATUS}
+  {$UNIFI.INTERVAL.PERFORMANCE}
+  {$UNIFI.INTERVAL.CAPACITY}
+  {$UNIFI.INTERVAL.CONFIG}
+  {$UNIFI.INTERVAL.INVENTORY}
   {$WAN1.EXPECTED.DL}
   {$WAN1.EXPECTED.UL}
   {$WAN2.EXPECTED.DL}
@@ -106,6 +126,10 @@ required_macros = %w[
   {$WAN.SPEED.THRESHOLD.PCT}
   {$DHCP.THRESHOLD.PCT}
   {$TEMP.MAX.WARN}
+  {$WIFI.TX.RETRIES.WARN}
+  {$PROTECT.SENSOR.BATTERY.MIN}
+  {$PROTECT.SENSOR.SIGNAL.MIN}
+  {$PROTECT.EVENT.WINDOW}
 ]
 required_macros.each { |macro| check(macro_names.include?(macro), "missing macro #{macro}") }
 used_macros = source.scan(/\{\$[A-Z0-9._]+\}/).uniq
@@ -113,6 +137,7 @@ check((used_macros - macro_names).empty?, "undefined macros: #{(used_macros - ma
 api_key = template.fetch('macros').find { |macro| macro['macro'] == '{$UNIFI.API.KEY}' }
 check(api_key['type'] == 'SECRET_TEXT', 'API key macro must be SECRET_TEXT')
 check(!api_key.key?('value'), 'API key macro must not contain a committed value')
+check(!macro_names.include?('{$UNIFI.INTERVAL}'), 'legacy one-size-fits-all interval macro must not be used')
 
 triggers = all_objects.select { |object| object.key?('expression') && object.key?('priority') }
 required_trigger_fragments = {
@@ -151,8 +176,38 @@ check(!site_availability_js.include?('/connected/i'), 'console-state matching mu
 site_offline_trigger = Array(site_availability && site_availability['trigger_prototypes']).find { |trigger| trigger['name'].include?('console is offline') }
 check(site_offline_trigger && site_offline_trigger['expression'].include?('count(') && site_offline_trigger['expression'].include?('#2'), 'site-offline alert must require two consecutive disconnected samples')
 
+inventory = template.fetch('items').find { |item| item['key'] == 'unifi.inventory.raw' }
+check(inventory && inventory['type'] == 'SCRIPT', 'shared unified inventory collector is missing')
+check(inventory['delay'] == '{$UNIFI.INTERVAL.INVENTORY}', 'unified inventory must use the inventory interval')
+protect_status = template.fetch('items').find { |item| item['key'] == 'unifi.protect.status.raw' }
+check(protect_status && protect_status['type'] == 'SCRIPT', 'consolidated Protect operational collector is missing')
+check(protect_status['params'].include?('/v1/cameras') && protect_status['params'].include?('/v1/sensors') && protect_status['params'].include?('/v1/alarm-hubs'),
+  'consolidated Protect collector must include cameras, sensors and Alarm Hubs') if protect_status
+check(!keys.any? { |key| key.start_with?('unifi.camera.raw[') }, 'per-camera HTTP collectors must not be recreated')
+camera_enabled = items.find { |item| item['key'] == 'unifi.camera.enabled[{#CAMERA.ID}]' }
+camera_enabled_js = Array(camera_enabled && camera_enabled['preprocessing']).map { |step| Array(step['parameters']).join("\n") }.join("\n")
+check(camera_enabled_js.include?('throw') && !camera_enabled_js.include?('return 1;'), 'missing camera enabled state must not be assumed true')
+device_online = items.find { |item| item['key'] == 'unifi.device.online[{#DEVICE.MAC}]' }
+check(device_online.dig('master_item', 'key') == 'unifi.sm.devices.raw', 'device availability must reuse the Site Manager inventory')
+device_offline_trigger = Array(device_online['trigger_prototypes']).find { |trigger| trigger['name'].include?('offline for more than 5 minutes') }
+check(device_offline_trigger && device_offline_trigger['expression'].include?('#4') && device_offline_trigger['expression'].include?('=4'),
+  'device-offline alert must require four consecutive two-minute samples')
+
+sequence_keys = %w[
+  unifi.device.online[{#DEVICE.MAC}]
+  unifi.protect.sensor.online[{#SENSOR.ID}]
+  unifi.protect.alarm_hub.online[{#ALARM.HUB.ID}]
+]
+sequence_keys.each do |key|
+  item = items.find { |candidate| candidate['key'] == key }
+  check(item, "missing sequence-based availability item #{key}")
+  types = item.fetch('preprocessing', []).map { |step| step['type'] }
+  check(!types.include?('DISCARD_UNCHANGED_HEARTBEAT'), "#{key} must retain consecutive samples")
+end
+
 javascript = []
 rules.each { |rule| javascript << [rule['key'], rule['params']] if rule['type'] == 'SCRIPT' }
+items.each { |item| javascript << [item['key'], item['params']] if item['type'] == 'SCRIPT' }
 items.each do |item|
   item.fetch('preprocessing', []).each_with_index do |step, index|
     javascript << ["#{item['key']} preprocessing #{index}", step.fetch('parameters').first] if step['type'] == 'JAVASCRIPT'

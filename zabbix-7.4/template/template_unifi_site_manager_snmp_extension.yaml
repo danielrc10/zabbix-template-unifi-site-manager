@@ -1,0 +1,870 @@
+# PT-BR: Extensão SNMP opcional do projeto UniFi Site Manager para Zabbix 7.4+.
+# EN: Optional UniFi Site Manager SNMP extension for Zabbix 7.4+.
+#
+# Autor / Author: Daniel Carvalho <danielrc10@gmail.com>
+# Repositório / Repository: https://github.com/danielrc10/zabbix-template-unifi-site-manager
+# Licença / License: PolyForm Noncommercial 1.0.0
+
+zabbix_export:
+  version: '7.4'
+  template_groups:
+  - uuid: aab21a9bb3b743478dc7b2e89d12bd2b
+    name: Templates/Network devices
+  templates:
+  - uuid: 2efad160959c44898623d210ea3eb51b
+    template: Template UniFi Site Manager - SNMP Extension
+    name: Template UniFi Site Manager - SNMP Extension
+    description: |
+      PT-BR:
+      Extensão opcional do Template UniFi Site Manager. Acrescenta telemetria local de
+      interfaces IF-MIB e métricas de rádios/VAPs do UI-MIB. Não substitui o monitoramento
+      principal pela API e requer uma interface SNMP alcançável pelo Zabbix Server ou Proxy.
+      O UI-MIB oficial não publica discos, SMART ou RAID.
+
+      EN:
+      Optional extension for Template UniFi Site Manager. It adds local IF-MIB interface
+      telemetry and Ubiquiti UI-MIB radio/VAP metrics. It never replaces API-first monitoring
+      and requires a reachable SNMP interface. The official UI-MIB exposes no disk, SMART,
+      or RAID objects.
+    vendor:
+      name: Daniel Carvalho
+      version: 1.0.0
+    groups:
+    - name: Templates/Network devices
+    items:
+    - uuid: '0396c6ea0d6d4bb4862ae57b99ace567'
+      name: 'UniFi SNMP extension: Agent availability'
+      type: INTERNAL
+      key: zabbix[host,snmp,available]
+      history: 30d
+      trends: 365d
+      description: Availability of the SNMP interface used only by this optional extension.
+      valuemap:
+        name: Zabbix host availability
+      tags:
+      - tag: component
+        value: SNMP
+      - tag: scope
+        value: extension
+      triggers:
+      - uuid: 91c18effaa9643788263354e99555d6d
+        expression: max(/Template UniFi Site Manager - SNMP Extension/zabbix[host,snmp,available],{$UNIFI.SNMP.TIMEOUT})=0
+        name: "[Warning] UniFi SNMP extension cannot collect from this device"
+        priority: WARNING
+        description: The API-first template remains independent. This event indicates
+          only that optional local SNMP enrichment is unavailable.
+        tags:
+        - tag: scope
+          value: performance
+        - tag: component
+          value: snmp-extension
+        opdata: 'SNMP availability: {ITEM.LASTVALUE1}'
+    - uuid: 62c628fe80674717814b29a8a3e80675
+      name: Management IP reported by UI-MIB
+      type: SNMP_AGENT
+      snmp_oid: get[1.3.6.1.4.1.41112.1.6.3.1.0]
+      key: unifi.snmp.system.ip
+      delay: "{$UNIFI.SNMP.INVENTORY.INTERVAL}"
+      history: 30d
+      description: Ubiquiti UI-MIB scalar. Primarily implemented by supported UniFi
+        access points.
+      tags:
+      - tag: component
+        value: Inventory
+      - tag: scope
+        value: snmp-extension
+      value_type: CHAR
+      trends: '0'
+      preprocessing:
+      - type: DISCARD_UNCHANGED_HEARTBEAT
+        parameters:
+        - 12h
+    - uuid: 6e698818a38742238180b08ac4c2d511
+      name: Model reported by UI-MIB
+      type: SNMP_AGENT
+      snmp_oid: get[1.3.6.1.4.1.41112.1.6.3.3.0]
+      key: unifi.snmp.system.model
+      delay: "{$UNIFI.SNMP.INVENTORY.INTERVAL}"
+      history: 30d
+      description: Ubiquiti UI-MIB scalar. Primarily implemented by supported UniFi
+        access points.
+      tags:
+      - tag: component
+        value: Inventory
+      - tag: scope
+        value: snmp-extension
+      value_type: CHAR
+      trends: '0'
+      preprocessing:
+      - type: DISCARD_UNCHANGED_HEARTBEAT
+        parameters:
+        - 12h
+    - uuid: fc4b2fcb9751411b896744dacd48b48e
+      name: Uplink information reported by UI-MIB
+      type: SNMP_AGENT
+      snmp_oid: get[1.3.6.1.4.1.41112.1.6.3.4.0]
+      key: unifi.snmp.system.uplink
+      delay: "{$UNIFI.SNMP.INVENTORY.INTERVAL}"
+      history: 30d
+      description: Ubiquiti UI-MIB scalar. Primarily implemented by supported UniFi
+        access points.
+      tags:
+      - tag: component
+        value: Inventory
+      - tag: scope
+        value: snmp-extension
+      value_type: CHAR
+      trends: '0'
+      preprocessing:
+      - type: DISCARD_UNCHANGED_HEARTBEAT
+        parameters:
+        - 12h
+    - uuid: 795228c4f4d748b980428778212d8930
+      name: Firmware version reported by UI-MIB
+      type: SNMP_AGENT
+      snmp_oid: get[1.3.6.1.4.1.41112.1.6.3.6.0]
+      key: unifi.snmp.system.version
+      delay: "{$UNIFI.SNMP.INVENTORY.INTERVAL}"
+      history: 30d
+      description: Ubiquiti UI-MIB scalar. Primarily implemented by supported UniFi
+        access points.
+      tags:
+      - tag: component
+        value: Inventory
+      - tag: scope
+        value: snmp-extension
+      value_type: CHAR
+      trends: '0'
+      preprocessing:
+      - type: DISCARD_UNCHANGED_HEARTBEAT
+        parameters:
+        - 12h
+    - uuid: c5d0eb533dc34fe989138752f17f1f5f
+      name: System uptime reported by UI-MIB
+      type: SNMP_AGENT
+      snmp_oid: get[1.3.6.1.4.1.41112.1.6.3.5.0]
+      key: unifi.snmp.system.uptime
+      delay: "{$UNIFI.SNMP.INTERVAL}"
+      history: 30d
+      description: Device uptime from unifiApSystemUptime. This complements cloud-reported
+        startupTime.
+      tags:
+      - tag: component
+        value: System
+      - tag: scope
+        value: snmp-extension
+      trends: 365d
+      units: uptime
+      triggers:
+      - uuid: eafb853649f9490b8d10321089b28ce0
+        expression: last(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.system.uptime)<10m
+          and change(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.system.uptime)<0
+        name: "[High] UniFi device reboot detected by SNMP"
+        priority: HIGH
+        description: The local UI-MIB uptime decreased and is below ten minutes.
+        tags:
+        - tag: scope
+          value: performance
+        - tag: component
+          value: snmp-extension
+        opdata: 'Uptime: {ITEM.LASTVALUE1}'
+    - uuid: 4cac51fe4aaf49e28ac6e90d6217d7d7
+      name: Access point isolation state
+      type: SNMP_AGENT
+      snmp_oid: get[1.3.6.1.4.1.41112.1.6.3.2.0]
+      key: unifi.snmp.system.isolated
+      delay: "{$UNIFI.SNMP.INTERVAL}"
+      history: 30d
+      description: UI-MIB TruthValue normalized to 1 when the access point is isolated.
+      tags:
+      - tag: component
+        value: Health
+      - tag: scope
+        value: snmp-extension
+      trends: 365d
+      preprocessing:
+      - type: JAVASCRIPT
+        parameters:
+        - 'return Number(value) === 1 ? 1 : 0;
+
+'
+      valuemap:
+        name: Boolean
+      triggers:
+      - uuid: 2c0ffea86dc44c988038719e15638a85
+        expression: last(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.system.isolated)=1
+        name: "[High] UniFi access point is isolated"
+        priority: HIGH
+        description: The local UI-MIB reports the AP isolation flag.
+        tags:
+        - tag: scope
+          value: performance
+        - tag: component
+          value: wireless
+        opdata: 'Isolated: {ITEM.LASTVALUE1}'
+    discovery_rules:
+    - uuid: 1601a6aa075f444285d68298c0488cf6
+      name: LLD - UniFi interfaces (SNMP extension)
+      type: SNMP_AGENT
+      snmp_oid: discovery[{#IFOPERSTATUS},1.3.6.1.2.1.2.2.1.8,{#IFADMINSTATUS},1.3.6.1.2.1.2.2.1.7,{#IFALIAS},1.3.6.1.2.1.31.1.1.1.18,{#IFNAME},1.3.6.1.2.1.31.1.1.1.1,{#IFDESCR},1.3.6.1.2.1.2.2.1.2,{#IFTYPE},1.3.6.1.2.1.2.2.1.3]
+      key: unifi.snmp.interfaces.discovery
+      delay: "{$UNIFI.SNMP.DISCOVERY.INTERVAL}"
+      lifetime_type: DELETE_AFTER
+      lifetime: 7d
+      enabled_lifetime_type: DISABLE_AFTER
+      enabled_lifetime: 1d
+      filter:
+        evaltype: AND
+        conditions:
+        - macro: "{#IFNAME}"
+          value: "{$UNIFI.SNMP.IFNAME.MATCHES}"
+        - macro: "{#IFNAME}"
+          value: "{$UNIFI.SNMP.IFNAME.NOT_MATCHES}"
+          operator: NOT_MATCHES_REGEX
+      description: Optional local interface telemetry using standard IF-MIB.
+      item_prototypes:
+      - uuid: fb636c92368149658b1a7320de3c51ab
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Administrative status'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.2.2.1.7.{#SNMPINDEX}]
+        key: unifi.snmp.if.admin[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: IF-MIB ifAdminStatus.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+      - uuid: 0de3f6c4e03948fc846c2bce164a36dd
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Operational status'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.2.2.1.8.{#SNMPINDEX}]
+        key: unifi.snmp.if.oper[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: IF-MIB ifOperStatus.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        trigger_prototypes:
+        - uuid: e2f5b8419e3d47c18f6ba2277aa9c83d
+          expression: '{$UNIFI.SNMP.IFCONTROL:"{#IFNAME}"}=1 and last(/Template UniFi
+            Site Manager - SNMP Extension/unifi.snmp.if.admin[{#SNMPINDEX}])=1 and
+            last(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.if.oper[{#SNMPINDEX}])=2'
+          name: "[Average] UniFi interface {#IFNAME} is down"
+          priority: AVERAGE
+          description: An administratively enabled interface selected by the context
+            macro is operationally down.
+          tags:
+          - tag: scope
+            value: performance
+          - tag: interface
+            value: "{#IFNAME}"
+          opdata: "{#IFDESCR}; alias: {#IFALIAS}"
+      - uuid: 19b0f7103e884a4082e2a09247164ebf
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Negotiated speed'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.31.1.1.1.15.{#SNMPINDEX}]
+        key: unifi.snmp.if.speed[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: IF-MIB ifHighSpeed, reported in millions of bits per second.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: Mbps
+      - uuid: 3d080f717b9243cf8e30d0de7c371d80
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Bits received'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.31.1.1.1.6.{#SNMPINDEX}]
+        key: unifi.snmp.if.in.bps[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Standard IF-MIB counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: bps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+        - type: MULTIPLIER
+          parameters:
+          - '8'
+      - uuid: f30489e72b9248918921df506b69be0d
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Bits sent'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.31.1.1.1.10.{#SNMPINDEX}]
+        key: unifi.snmp.if.out.bps[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Standard IF-MIB counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: bps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+        - type: MULTIPLIER
+          parameters:
+          - '8'
+      - uuid: f48ea7fc88234c3280c0b227b5283ce4
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Inbound errors'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.2.2.1.14.{#SNMPINDEX}]
+        key: unifi.snmp.if.in.errors[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Standard IF-MIB counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: 5d12032a8ecf45d58a124f17d0ed24b5
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Outbound errors'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.2.2.1.20.{#SNMPINDEX}]
+        key: unifi.snmp.if.out.errors[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Standard IF-MIB counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: 399055465c86471082b1cd197cdf4ac6
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Inbound discards'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.2.2.1.13.{#SNMPINDEX}]
+        key: unifi.snmp.if.in.discards[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Standard IF-MIB counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: 422453c1c9cb48228373956d48ea93c7
+        name: 'Interface {#IFNAME} ({#IFALIAS}): Outbound discards'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.2.1.2.2.1.19.{#SNMPINDEX}]
+        key: unifi.snmp.if.out.discards[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Standard IF-MIB counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Interface
+        - tag: scope
+          value: snmp-extension
+        - tag: interface
+          value: "{#IFNAME}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+    - uuid: c4b3b9b8460b4af98332a5390a6988fe
+      name: LLD - UniFi radios (SNMP extension)
+      type: SNMP_AGENT
+      snmp_oid: discovery[{#RADIO.NAME},1.3.6.1.4.1.41112.1.6.1.1.1.2,{#RADIO.TYPE},1.3.6.1.4.1.41112.1.6.1.1.1.3]
+      key: unifi.snmp.radios.discovery
+      delay: "{$UNIFI.SNMP.DISCOVERY.INTERVAL}"
+      lifetime_type: DELETE_AFTER
+      lifetime: 7d
+      enabled_lifetime_type: DISABLE_AFTER
+      enabled_lifetime: 1d
+      description: Ubiquiti-specific radio telemetry that is not available in the
+        official cloud API.
+      item_prototypes:
+      - uuid: 88ae046a356c474d8fc480e069436f55
+        name: 'Radio {#RADIO.NAME} ({#RADIO.TYPE}): Total channel utilization'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.1.1.6.{#SNMPINDEX}]
+        key: unifi.snmp.radio.util.total[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB radio channel-utilization metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: radio
+          value: "{#RADIO.NAME}"
+        trends: 365d
+        units: "%"
+        trigger_prototypes:
+        - uuid: dfa9282dd161446887f50c0301b6f2a1
+          expression: avg(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.radio.util.total[{#SNMPINDEX}],10m)>{$UNIFI.SNMP.RADIO.UTIL.WARN}
+          name: "[Average] High WiFi channel utilization on radio {#RADIO.NAME}"
+          priority: AVERAGE
+          description: Total channel utilization remained above the configured threshold.
+          tags:
+          - tag: scope
+            value: performance
+          - tag: radio
+            value: "{#RADIO.NAME}"
+          opdata: 'Utilization: {ITEM.LASTVALUE1}'
+      - uuid: ca559171311443708ea7cdf34972ef22
+        name: 'Radio {#RADIO.NAME} ({#RADIO.TYPE}): Self receive channel utilization'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.1.1.7.{#SNMPINDEX}]
+        key: unifi.snmp.radio.util.self.rx[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB radio channel-utilization metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: radio
+          value: "{#RADIO.NAME}"
+        trends: 365d
+        units: "%"
+      - uuid: 33458c8e0d954794884a6e9307eacb2b
+        name: 'Radio {#RADIO.NAME} ({#RADIO.TYPE}): Self transmit channel utilization'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.1.1.8.{#SNMPINDEX}]
+        key: unifi.snmp.radio.util.self.tx[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB radio channel-utilization metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: radio
+          value: "{#RADIO.NAME}"
+        trends: 365d
+        units: "%"
+      - uuid: 3a98acddcaff482c89427a43f34e4886
+        name: 'Radio {#RADIO.NAME} ({#RADIO.TYPE}): Other BSS channel utilization'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.1.1.9.{#SNMPINDEX}]
+        key: unifi.snmp.radio.util.other-bss[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB radio channel-utilization metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: radio
+          value: "{#RADIO.NAME}"
+        trends: 365d
+        units: "%"
+        trigger_prototypes:
+        - uuid: 84e15185e15242fa8b94ea473403ee04
+          expression: avg(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.radio.util.other-bss[{#SNMPINDEX}],10m)>{$UNIFI.SNMP.RADIO.INTERFERENCE.WARN}
+          name: "[Average] High neighboring-BSS interference on radio {#RADIO.NAME}"
+          priority: AVERAGE
+          description: Other-BSS utilization remained above the configured threshold.
+          tags:
+          - tag: scope
+            value: performance
+          - tag: radio
+            value: "{#RADIO.NAME}"
+          opdata: 'Other BSS: {ITEM.LASTVALUE1}'
+    - uuid: 8ecc6c9ae34240e38684beb67b970dfd
+      name: LLD - UniFi virtual access points (SNMP extension)
+      type: SNMP_AGENT
+      snmp_oid: discovery[{#VAP.ESSID},1.3.6.1.4.1.41112.1.6.1.2.1.6,{#VAP.NAME},1.3.6.1.4.1.41112.1.6.1.2.1.7,{#VAP.RADIO},1.3.6.1.4.1.41112.1.6.1.2.1.9,{#VAP.UP},1.3.6.1.4.1.41112.1.6.1.2.1.22]
+      key: unifi.snmp.vaps.discovery
+      delay: "{$UNIFI.SNMP.DISCOVERY.INTERVAL}"
+      lifetime_type: DELETE_AFTER
+      lifetime: 7d
+      enabled_lifetime_type: DISABLE_AFTER
+      enabled_lifetime: 1d
+      description: Discovers UI-MIB VAPs and adds local SSID/radio telemetry to the
+        API-first project.
+      item_prototypes:
+      - uuid: 227dee4daaff49798242edc3b7356088
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Connected stations'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.8.{#SNMPINDEX}]
+        key: unifi.snmp.vap.clients[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB virtual access point metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+      - uuid: ee3c05d361754ccf8d3949bfa4289832
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Client connection quality'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.3.{#SNMPINDEX}]
+        key: unifi.snmp.vap.ccq[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB virtual access point metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: "%"
+        trigger_prototypes:
+        - uuid: 27b0c648ce9740af8e03cfc51949215e
+          expression: last(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.vap.clients[{#SNMPINDEX}])>0
+            and avg(/Template UniFi Site Manager - SNMP Extension/unifi.snmp.vap.ccq[{#SNMPINDEX}],10m)<{$UNIFI.SNMP.CCQ.WARN}
+          name: "[Average] Low WiFi connection quality on SSID {#VAP.ESSID}"
+          priority: AVERAGE
+          description: Average CCQ is below the threshold while stations are connected.
+          tags:
+          - tag: scope
+            value: performance
+          - tag: ssid
+            value: "{#VAP.ESSID}"
+          opdata: 'CCQ: {ITEM.LASTVALUE1}'
+      - uuid: a4d58a542f7d4e148050f0d141646d3f
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Channel'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.4.{#SNMPINDEX}]
+        key: unifi.snmp.vap.channel[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB virtual access point metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+      - uuid: 650c15dd96274ba982cf53abf6b5170c
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Transmit power'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.21.{#SNMPINDEX}]
+        key: unifi.snmp.vap.tx.power[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB virtual access point metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: dBm
+      - uuid: f7b457ee5191415f8950cd4dd3590cc8
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Operational state'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.22.{#SNMPINDEX}]
+        key: unifi.snmp.vap.up[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB virtual access point metric.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        preprocessing:
+        - type: JAVASCRIPT
+          parameters:
+          - 'return Number(value) === 1 ? 1 : 0;
+
+'
+        valuemap:
+          name: Boolean
+      - uuid: 8e618d8c7cf842c985547ced17fdfef7
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Bits received'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.10.{#SNMPINDEX}]
+        key: unifi.snmp.vap.rx.bps[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: bps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+        - type: MULTIPLIER
+          parameters:
+          - '8'
+      - uuid: 3ca3ffbe9ba7416386117eaa0f2f3ca9
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Bits sent'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.16.{#SNMPINDEX}]
+        key: unifi.snmp.vap.tx.bps[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: bps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+        - type: MULTIPLIER
+          parameters:
+          - '8'
+      - uuid: c73761978003415187d35a66dcda2c51
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Receive drops'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.12.{#SNMPINDEX}]
+        key: unifi.snmp.vap.rx.dropped[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: ba4549edafbe479b8074981200e618d0
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Receive errors'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.13.{#SNMPINDEX}]
+        key: unifi.snmp.vap.rx.errors[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: f37e6d10e6164758807176b30898bee4
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Transmit drops'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.17.{#SNMPINDEX}]
+        key: unifi.snmp.vap.tx.dropped[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: dc4c938b0d214ecd8b9163916e2e3879
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Transmit errors'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.18.{#SNMPINDEX}]
+        key: unifi.snmp.vap.tx.errors[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: 1cbce474016347cd81bb706582f75163
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Packets sent'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.19.{#SNMPINDEX}]
+        key: unifi.snmp.vap.tx.packets[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+      - uuid: ffba922f6afa415b8489f30262837246
+        name: 'SSID {#VAP.ESSID} / {#VAP.RADIO}: Transmit retries'
+        type: SNMP_AGENT
+        snmp_oid: get[1.3.6.1.4.1.41112.1.6.1.2.1.20.{#SNMPINDEX}]
+        key: unifi.snmp.vap.tx.retries[{#SNMPINDEX}]
+        delay: "{$UNIFI.SNMP.INTERVAL}"
+        history: 30d
+        description: Ubiquiti UI-MIB VAP counter converted to a per-second rate.
+        tags:
+        - tag: component
+          value: Wireless
+        - tag: scope
+          value: snmp-extension
+        - tag: ssid
+          value: "{#VAP.ESSID}"
+        - tag: radio
+          value: "{#VAP.RADIO}"
+        trends: 365d
+        units: pps
+        preprocessing:
+        - type: CHANGE_PER_SECOND
+    tags:
+    - tag: class
+      value: network
+    - tag: component
+      value: snmp-extension
+    - tag: target
+      value: unifi-device
+    macros:
+    - macro: "{$UNIFI.SNMP.INTERVAL}"
+      value: 2m
+      description: Optional local SNMP telemetry interval.
+    - macro: "{$UNIFI.SNMP.INVENTORY.INTERVAL}"
+      value: 6h
+      description: Static UI-MIB system information interval.
+    - macro: "{$UNIFI.SNMP.DISCOVERY.INTERVAL}"
+      value: 6h
+      description: Interface, radio and VAP discovery interval.
+    - macro: "{$UNIFI.SNMP.TIMEOUT}"
+      value: 5m
+      description: SNMP-unavailable alarm window.
+    - macro: "{$UNIFI.SNMP.IFNAME.MATCHES}"
+      value: ".*"
+      description: Interface names included by discovery.
+    - macro: "{$UNIFI.SNMP.IFNAME.NOT_MATCHES}"
+      value: "^(lo|loopback|sit[0-9]*|ip6tnl[0-9]*)$"
+      description: Interface names excluded by discovery.
+    - macro: "{$UNIFI.SNMP.IFCONTROL}"
+      value: '0'
+      description: Default interface-down alarm control. Set context macros to 1 only
+        for critical interfaces.
+    - macro: "{$UNIFI.SNMP.RADIO.UTIL.WARN}"
+      value: '80'
+      description: High total channel utilization threshold in percent.
+    - macro: "{$UNIFI.SNMP.RADIO.INTERFERENCE.WARN}"
+      value: '70'
+      description: High other-BSS utilization threshold in percent.
+    - macro: "{$UNIFI.SNMP.CCQ.WARN}"
+      value: '70'
+      description: Low client connection quality threshold in percent.
+    valuemaps:
+    - uuid: 83714d560a7f4f8a84c50a9ab40c8d6f
+      name: Boolean
+      mappings:
+      - value: '0'
+        newvalue: 'No'
+      - value: '1'
+        newvalue: 'Yes'
+    - uuid: 0c8b9778d6e549e882664bb29e91dfdf
+      name: Zabbix host availability
+      mappings:
+      - value: '0'
+        newvalue: Not available
+      - value: '1'
+        newvalue: Available
+      - value: '2'
+        newvalue: Unknown

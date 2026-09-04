@@ -23,7 +23,7 @@ Na GUI do Zabbix:
 
 1. Importe `zabbix-7.4/template/template_unifi_site_manager.yaml`.
 2. Crie um host lógico sem interface.
-3. Vincule `Template UniFi Site Manager by HTTP`.
+3. Vincule `Template UniFi Site Manager`.
 4. Defina `{$UNIFI.API.KEY}` no host como **Texto secreto**.
 5. Defina os valores de WAN e execute as regras LLD.
 
@@ -42,18 +42,27 @@ curl --fail-with-body \
 
 Não coloque a chave diretamente na linha de comando, pois ela pode aparecer no histórico e na lista de processos.
 
+### Extensão SNMP opcional
+
+Importe `template/template_unifi_site_manager_snmp_extension.yaml` somente se desejar telemetria local adicional. Vincule `Template UniFi Site Manager - SNMP Extension` aos hosts individuais que possuam interface SNMP alcançável. Não o vincule ao host lógico da conta Site Manager.
+
+Consulte [SNMP-EXTENSION.md](SNMP-EXTENSION.md) para OIDs, limitações e macros com contexto.
+
 ### Dimensionamento
 
-As LLDs percorrem consoles, sites e dispositivos. Em contas grandes:
+As LLDs suportadas reutilizam uma única coleta de inventário. Em contas grandes:
 
-- aumente a descoberta de `1h` para `3h` ou `6h`;
+- aumente `{$UNIFI.INTERVAL.INVENTORY}` de `1h` para `3h` ou `6h`;
+- ajuste desempenho e configuração independentemente da disponibilidade;
 - monitore a fila dos HTTP Agent pollers;
 - respeite 100 requisições/minuto por console;
-- evite executar todas as LLDs manualmente ao mesmo tempo;
-- divida contas muito grandes em hosts lógicos separados.
+- monitore a fila de preprocessors e o tamanho do inventário unificado;
+- consulte [SCALING.md](SCALING.md) antes de dividir contas.
 
 ## English
 
 Requirements are Zabbix Server/Proxy 7.4+ with HTTPS egress to `api.ui.com:443`, enough HTTP Agent pollers, a read-capable Site Manager API key, and consoles supported by Cloud Connector.
 
-Clone the repository, run the validator, import the YAML, create an interface-less logical host, link the template, and configure `{$UNIFI.API.KEY}` as a secret host macro. Never commit the key or place it directly on a shell command line. For large estates, increase the LLD interval, watch HTTP Agent queues, respect the 100 requests/minute per-console limit, and split collection when necessary.
+Clone the repository, run both validators, import the primary YAML, create an interface-less logical host, link `Template UniFi Site Manager`, and configure `{$UNIFI.API.KEY}` as a secret host macro. Never commit the key or place it directly on a shell command line.
+
+The optional `Template UniFi Site Manager - SNMP Extension` belongs on individual reachable device hosts, never on the logical API host. For large estates, tune inventory and performance independently and follow [SCALING.md](SCALING.md).
