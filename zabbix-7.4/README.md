@@ -51,7 +51,7 @@ A extensão `Template UniFi Site Manager - SNMP Extension` é um complemento ind
 | `{$UNIFI.INTERVAL.AVAILABILITY}` | `1m` | API, console e aplicações |
 | `{$UNIFI.INTERVAL.STATUS}` | `2m` | Sites, dispositivos, WAN e estado do Protect |
 | `{$UNIFI.INTERVAL.PERFORMANCE}` | `5m` | ISP, clientes, VPN e estatísticas |
-| `{$UNIFI.INTERVAL.CAPACITY}` | `15m` | DHCP e armazenamento condicional |
+| `{$UNIFI.INTERVAL.CAPACITY}` | `15m` | DHCP, vouchers e armazenamento condicional |
 | `{$UNIFI.INTERVAL.CONFIG}` | `15m` | Configuração e auditoria |
 | `{$UNIFI.INTERVAL.INVENTORY}` | `1h` | Inventário compartilhado por onze LLDs |
 | `{$UNIFI.API.NODATA}` | `5m` | Janela sem resposta da API |
@@ -70,6 +70,10 @@ A extensão `Template UniFi Site Manager - SNMP Extension` é um complemento ind
 | `{$PROTECT.SENSOR.BATTERY.MIN}` | `20` | Carga mínima da bateria do sensor em % |
 | `{$PROTECT.SENSOR.SIGNAL.MIN}` | `20` | Qualidade mínima do sinal do sensor em % |
 | `{$PROTECT.EVENT.WINDOW}` | `10m` | Janela de alarme para evento de vazamento/violação |
+| `{$UNIFI.VOUCHER.MONITOR}` | `0` | Habilita alarmes de vouchers; use contexto pelo nome do site |
+| `{$UNIFI.VOUCHER.AVAILABLE.MIN}` | `10` | Quantidade mínima de vouchers disponíveis |
+| `{$UNIFI.VOUCHER.EXPIRES.WARN}` | `24h` | Janela para alertar vencimento próximo |
+| `{$UNIFI.VOUCHER.USAGE.EVENT}` | `0` | Evento informativo a cada aumento de consumo |
 
 ### Descobertas
 
@@ -102,6 +106,7 @@ A LLD de Sites correlaciona o inventário global com os IDs UUID locais do Netwo
 | Protect | conexão das câmeras; sensores com bateria, sinal, temperatura, umidade, luz, abertura, movimento, vazamento e tamper; Alarm Hub; armamento/breach do NVR | stream loss separado, gravação ativa/modo, discos, SMART e RAID não são publicados |
 | WAN/ISP | interfaces, disponibilidade primária, latência média/máxima, perda, throughput, uptime/downtime, ISP/ASN e frescor | prioridade ativa e Speedtest interno não são publicados no endpoint WAN comum |
 | Segurança | contagem e hash canônico de ACL, ordenação, políticas/zonas de firewall, DNS, listas de tráfego, LAG, MC-LAG e switch stacks | não abrange famílias legadas que não estão nos endpoints oficiais atuais |
+| Hotspot/vouchers | total, não usados, ativados/consumidos, disponíveis, esgotados, expirados, usos autorizados, usos restantes e vencimento próximo | resumo limitado aos primeiros 1000 vouchers; em caso de truncamento, alarmes de estoque são suprimidos |
 | DHCP | range configurado e percentual de endereços atualmente observados nos clientes conectados | não é a tabela de leases: clientes desconectados com lease válido não aparecem e IPs estáticos podem aparecer; por isso o valor é uma estimativa |
 | Wi-Fi | SSIDs, rádios, TX retries e clientes por uplink/AP | SSID/banda por cliente, experience e airtime não são publicados |
 | BGP/OSPF | não monitorado pela API oficial; a LLD obrigatória permanece desabilitada e não descobre entidades | a API Network publicada não oferece endpoint de vizinhos, estado de adjacência, flaps ou contagem de rotas |
@@ -133,6 +138,20 @@ Ela não realiza coleta nem cria itens para peers. Foi mantida somente para deix
 - alteração canônica de ACL/firewall;
 - dispositivos offline, reboot e firmware pendente;
 - indisponibilidade agregada de Internet e VPNs inventariadas.
+- estoque baixo ou zerado de vouchers, vencimento próximo, lote criado, aumento opcional de consumo e resposta truncada.
+
+#### Vouchers de hotspot sem expor os códigos
+
+A coleta de vouchers ocorre a cada `{$UNIFI.INTERVAL.CAPACITY}` e gera somente um resumo por site. O JavaScript do item mestre descarta códigos secretos, IDs e nomes antes de o valor entrar no histórico do Zabbix. Não existe LLD por voucher e, portanto, a quantidade de itens não cresce com cada lote criado.
+
+Os alarmes ficam desabilitados por padrão. Para habilitá-los apenas em um site, crie macros com contexto no host, usando exatamente o `{#SITE.NAME}` descoberto:
+
+```text
+{$UNIFI.VOUCHER.MONITOR:"Matriz"}=1
+{$UNIFI.VOUCHER.AVAILABLE.MIN:"Matriz"}=10
+```
+
+`Disponível` significa voucher não expirado que ainda aceita pelo menos uma autorização; vouchers sem `authorizedGuestLimit` são tratados como ilimitados. Se a conta ultrapassar 1000 vouchers no site, o total informado pela API continua sendo coletado, mas os contadores por estado representam apenas a primeira página. Nesse caso o template alerta truncamento e bloqueia alarmes de estoque baixo/zerado para evitar falso positivo.
 
 Também é recomendável criar alarmes de orçamento PoE, capacidade total do NVR, detecções de segurança, versão do aplicativo e expiração da API key assim que esses valores forem publicados de forma estável pelos endpoints oficiais.
 
@@ -155,7 +174,7 @@ Fontes oficiais: [Site Manager API](https://developer.ui.com/site-manager/v1.0.0
 
 This template monitors a complete UniFi account from one logical Zabbix host. Zabbix Server or Proxy polls Site Manager and uses the official Cloud Connector to forward read-only requests to every console's Network and Protect applications.
 
-Asynchronous HTTP Agent items collect operational payloads. One hourly unified inventory feeds eleven dependent JavaScript LLD rules, and one consolidated Protect collector replaces per-entity polling. Configure `{$UNIFI.API.KEY}` as a secret host macro, set the expected WAN bandwidth, run discovery, and verify the fields published by your application versions.
+Asynchronous HTTP Agent items collect operational payloads. One hourly unified inventory feeds eleven dependent JavaScript LLD rules, and one consolidated Protect collector replaces per-entity polling. Hotspot voucher data is sanitized into aggregate per-site counters before storage; secret codes, IDs, and names are discarded. Configure `{$UNIFI.API.KEY}` as a secret host macro, set the expected WAN bandwidth, run discovery, and verify the fields published by your application versions.
 
 The optional `Template UniFi Site Manager - SNMP Extension` adds reachable-device IF-MIB and UI-MIB telemetry. It never replaces the primary API template and is not required for remote monitoring.
 

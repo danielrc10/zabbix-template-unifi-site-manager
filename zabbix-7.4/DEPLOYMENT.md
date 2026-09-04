@@ -27,6 +27,16 @@ Na GUI do Zabbix:
 4. Defina `{$UNIFI.API.KEY}` no host como **Texto secreto**.
 5. Defina os valores de WAN e execute as regras LLD.
 
+Se um site usa vouchers como capacidade operacional, habilite os alarmes com contexto pelo nome descoberto. Eles permanecem desligados nos demais sites:
+
+```text
+{$UNIFI.VOUCHER.MONITOR:"Matriz"}=1
+{$UNIFI.VOUCHER.AVAILABLE.MIN:"Matriz"}=10
+{$UNIFI.VOUCHER.EXPIRES.WARN}=24h
+```
+
+O evento de consumo individual é mais ruidoso e permanece opt-in com `{$UNIFI.VOUCHER.USAGE.EVENT:"Matriz"}=1`. O template armazena apenas contadores agregados; códigos, IDs e nomes dos vouchers são descartados no pré-processamento.
+
 Nunca grave a chave no template, no repositório ou em uma macro visível. Se vários hosts usarem a mesma conta, avalie um provedor de secrets compatível com Zabbix.
 
 ### Teste seguro da chave
@@ -63,6 +73,6 @@ As LLDs suportadas reutilizam uma única coleta de inventário. Em contas grande
 
 Requirements are Zabbix Server/Proxy 7.4+ with HTTPS egress to `api.ui.com:443`, enough HTTP Agent pollers, a read-capable Site Manager API key, and consoles supported by Cloud Connector.
 
-Clone the repository, run both validators, import the primary YAML, create an interface-less logical host, link `Template UniFi Site Manager`, and configure `{$UNIFI.API.KEY}` as a secret host macro. Never commit the key or place it directly on a shell command line.
+Clone the repository, run both validators, import the primary YAML, create an interface-less logical host, link `Template UniFi Site Manager`, and configure `{$UNIFI.API.KEY}` as a secret host macro. Voucher alarms are disabled by default and can be enabled per site with a context on `{$UNIFI.VOUCHER.MONITOR}`. Never commit the API key or place it directly on a shell command line.
 
 The optional `Template UniFi Site Manager - SNMP Extension` belongs on individual reachable device hosts, never on the logical API host. For large estates, tune inventory and performance independently and follow [SCALING.md](SCALING.md).

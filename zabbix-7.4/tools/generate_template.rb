@@ -11,7 +11,7 @@ require 'digest'
 require 'yaml'
 
 TEMPLATE_NAME = 'Template UniFi Site Manager'
-TEMPLATE_VERSION = '1.1.0'
+TEMPLATE_VERSION = '1.2.0'
 OUTPUT = File.expand_path('../template/template_unifi_site_manager.yaml', __dir__)
 SITE_JS_OUTPUT = File.expand_path('../javascript/site_discovery.js', __dir__)
 
@@ -1118,6 +1118,182 @@ site_raw_endpoints.each do |slug, (path, label, delay)|
   )
   raw['tags'] = tags('Raw', 'site' => '{#SITE.NAME}', 'application' => 'Network')
   site_item_prototypes << raw
+end
+
+voucher_summary = http_item(
+  seed: 'site-vouchers-summary',
+  name: '[{#SITE.NAME}] Hotspot: Sanitized voucher summary',
+  key: 'unifi.site.vouchers.summary[{#NETWORK.SITE.ID}]',
+  url: '{$UNIFI.API.URL}/v1/connector/consoles/{#HOST.ID}/proxy/network/integration/v1/sites/{#NETWORK.SITE.ID}/hotspot/vouchers?offset=0&limit=1000',
+  delay: '{$UNIFI.INTERVAL.CAPACITY}',
+  prototype: true
+)
+voucher_summary['description'] = 'Fetches at most 1000 hotspot vouchers and immediately replaces the response with aggregate counters. Voucher codes, IDs and names are never returned by preprocessing or stored in Zabbix history.'
+voucher_summary['preprocessing'] = js(<<~'JS')
+  var payload = JSON.parse(value);
+  if (payload.code || Number(payload.httpStatusCode) >= 400) {
+      throw String(payload.message || payload.code || ('HTTP ' + payload.httpStatusCode));
+  }
+
+  function durationSeconds(text) {
+      var match = String(text).trim().match(/^(\d+)([smhdw])$/i);
+      if (!match) throw 'Invalid {$UNIFI.VOUCHER.EXPIRES.WARN}; use a duration such as 24h.';
+      var factors = {s: 1, m: 60, h: 3600, d: 86400, w: 604800};
+      return Number(match[1]) * factors[match[2].toLowerCase()];
+  }
+
+  var vouchers = Array.isArray(payload.data) ? payload.data : [];
+  var total = typeof payload.totalCount !== 'undefined' ? Number(payload.totalCount) : vouchers.length;
+  if (!isFinite(total) || total < 0) total = vouchers.length;
+
+  var summary = {
+      total: total,
+      returned_count: vouchers.length,
+      truncated: vouchers.length < total ? 1 : 0,
+      unused: 0,
+      activated: 0,
+      available: 0,
+      exhausted: 0,
+      expired: 0,
+      guest_uses_total: 0,
+      finite_remaining_uses: 0,
+      unlimited_available: 0,
+      expiring_soon: 0
+  };
+  var now = Date.now();
+  var expiryWindowMs = durationSeconds('{$UNIFI.VOUCHER.EXPIRES.WARN}') * 1000;
+
+  for (var i = 0; i < vouchers.length; i++) {
+      var voucher = vouchers[i] || {};
+      var expired = voucher.expired === true;
+      var used = Number(voucher.authorizedGuestCount || 0);
+      if (!isFinite(used) || used < 0) used = 0;
+
+      var hasLimit = voucher.authorizedGuestLimit !== null &&
+          typeof voucher.authorizedGuestLimit !== 'undefined' &&
+          isFinite(Number(voucher.authorizedGuestLimit));
+      var limit = hasLimit ? Math.max(0, Number(voucher.authorizedGuestLimit)) : 0;
+
+      summary.guest_uses_total += used;
+      if (expired) summary.expired++;
+      if (used > 0 || voucher.activatedAt) summary.activated++;
+      if (!expired && used === 0) summary.unused++;
+
+      if (!expired && (!hasLimit || used < limit)) summary.available++;
+      if (!expired && hasLimit && used >= limit) summary.exhausted++;
+      if (!expired && hasLimit) summary.finite_remaining_uses += Math.max(0, limit - used);
+      if (!expired && !hasLimit) summary.unlimited_available++;
+
+      if (!expired && voucher.expiresAt) {
+          var expiresAt = Date.parse(voucher.expiresAt);
+          if (isFinite(expiresAt) && expiresAt > now && expiresAt <= now + expiryWindowMs) {
+              summary.expiring_soon++;
+          }
+      }
+  }
+
+  return JSON.stringify(summary);
+JS
+voucher_summary['tags'] = tags('Hotspot', 'site' => '{#SITE.NAME}', 'application' => 'Network')
+site_item_prototypes << voucher_summary
+
+voucher_master = 'unifi.site.vouchers.summary[{#NETWORK.SITE.ID}]'
+voucher_metrics = [
+  ['total', 'Total vouchers', 'total'],
+  ['unused', 'Unused active vouchers', 'unused'],
+  ['activated', 'Activated/consumed vouchers', 'activated'],
+  ['available', 'Available vouchers', 'available'],
+  ['exhausted', 'Exhausted vouchers', 'exhausted'],
+  ['expired', 'Expired vouchers', 'expired'],
+  ['guest_uses_total', 'Authorized guest uses', 'guest_uses_total'],
+  ['finite_remaining_uses', 'Remaining uses on limited vouchers', 'finite_remaining_uses'],
+  ['unlimited_available', 'Available unlimited vouchers', 'unlimited_available'],
+  ['expiring_soon', 'Active vouchers expiring soon', 'expiring_soon'],
+  ['truncated', 'Voucher response truncated', 'truncated']
+]
+
+voucher_metrics.each do |slug, label, field|
+  voucher_triggers = case slug
+                     when 'total'
+                       [
+                         trigger(
+                           seed: 'trigger-voucher-batch-created',
+                           expression: 'change(/Template UniFi Site Manager/unifi.site.vouchers.total[{#NETWORK.SITE.ID}])>0 and {$UNIFI.VOUCHER.MONITOR:"{#SITE.NAME}"}=1',
+                           name: '[Information] New hotspot voucher batch detected on {#SITE.NAME}',
+                           priority: 'INFO',
+                           description: 'The total number of hotspot vouchers increased. This is an audit event and recovers after the next unchanged collection.',
+                           tags: {'site' => '{#SITE.NAME}', 'service' => 'hotspot'}
+                         )
+                       ]
+                     when 'available'
+                       [
+                         trigger(
+                           seed: 'trigger-vouchers-none-available',
+                           expression: 'last(/Template UniFi Site Manager/unifi.site.vouchers.available[{#NETWORK.SITE.ID}])=0 and last(/Template UniFi Site Manager/unifi.site.vouchers.truncated[{#NETWORK.SITE.ID}])=0 and {$UNIFI.VOUCHER.MONITOR:"{#SITE.NAME}"}=1',
+                           name: '[High] No hotspot vouchers available on {#SITE.NAME}',
+                           priority: 'HIGH',
+                           description: 'No non-expired voucher has remaining guest capacity. Disabled by default through the monitoring macro.',
+                           tags: {'site' => '{#SITE.NAME}', 'service' => 'hotspot'}
+                         ),
+                         trigger(
+                           seed: 'trigger-vouchers-low-stock',
+                           expression: 'last(/Template UniFi Site Manager/unifi.site.vouchers.available[{#NETWORK.SITE.ID}])>0 and last(/Template UniFi Site Manager/unifi.site.vouchers.available[{#NETWORK.SITE.ID}])<{$UNIFI.VOUCHER.AVAILABLE.MIN:"{#SITE.NAME}"} and last(/Template UniFi Site Manager/unifi.site.vouchers.truncated[{#NETWORK.SITE.ID}])=0 and {$UNIFI.VOUCHER.MONITOR:"{#SITE.NAME}"}=1',
+                           name: '[Average] Hotspot voucher stock is low on {#SITE.NAME}',
+                           priority: 'AVERAGE',
+                           description: 'The number of non-expired vouchers with remaining capacity is below the configured site threshold.',
+                           opdata: 'Available: {ITEM.LASTVALUE1}',
+                           tags: {'site' => '{#SITE.NAME}', 'service' => 'hotspot'}
+                         )
+                       ]
+                     when 'guest_uses_total'
+                       [
+                         trigger(
+                           seed: 'trigger-voucher-consumption-increased',
+                           expression: 'change(/Template UniFi Site Manager/unifi.site.vouchers.guest_uses_total[{#NETWORK.SITE.ID}])>0 and {$UNIFI.VOUCHER.MONITOR:"{#SITE.NAME}"}=1 and {$UNIFI.VOUCHER.USAGE.EVENT:"{#SITE.NAME}"}=1',
+                           name: '[Information] Hotspot voucher consumption increased on {#SITE.NAME}',
+                           priority: 'INFO',
+                           description: 'One or more additional guest authorizations were recorded. The event is opt-in to avoid alert noise.',
+                           tags: {'site' => '{#SITE.NAME}', 'service' => 'hotspot'}
+                         )
+                       ]
+                     when 'expiring_soon'
+                       [
+                         trigger(
+                           seed: 'trigger-vouchers-expiring-soon',
+                           expression: 'last(/Template UniFi Site Manager/unifi.site.vouchers.expiring_soon[{#NETWORK.SITE.ID}])>0 and {$UNIFI.VOUCHER.MONITOR:"{#SITE.NAME}"}=1',
+                           name: '[Warning] Active hotspot vouchers expire soon on {#SITE.NAME}',
+                           priority: 'WARNING',
+                           description: 'At least one non-expired voucher expires inside the configured warning window.',
+                           opdata: 'Expiring soon: {ITEM.LASTVALUE1}',
+                           tags: {'site' => '{#SITE.NAME}', 'service' => 'hotspot'}
+                         )
+                       ]
+                     when 'truncated'
+                       [
+                         trigger(
+                           seed: 'trigger-vouchers-truncated',
+                           expression: 'last(/Template UniFi Site Manager/unifi.site.vouchers.truncated[{#NETWORK.SITE.ID}])=1 and {$UNIFI.VOUCHER.MONITOR:"{#SITE.NAME}"}=1',
+                           name: '[Warning] Hotspot voucher response is truncated on {#SITE.NAME}',
+                           priority: 'WARNING',
+                           description: 'The site has more than 1000 vouchers. The total remains authoritative, but status breakdowns cover only the first page; low/no-stock alerts are suppressed.',
+                           tags: {'site' => '{#SITE.NAME}', 'service' => 'hotspot'}
+                         )
+                       ]
+                     else
+                       []
+                     end
+
+  item = dependent_item(
+    seed: "site-vouchers-#{slug}",
+    name: "[{#SITE.NAME}] Hotspot: #{label}",
+    key: "unifi.site.vouchers.#{slug}[{#NETWORK.SITE.ID}]",
+    master: voucher_master,
+    preprocessing: js("var summary = JSON.parse(value); return Number(summary.#{field});"),
+    item_tags: tags('Hotspot', 'site' => '{#SITE.NAME}', 'application' => 'Network'),
+    triggers: voucher_triggers
+  )
+  item['valuemap'] = {'name' => 'Boolean'} if slug == 'truncated'
+  site_item_prototypes << item
 end
 
 %w[devices clients acl].each do |slug|
@@ -3549,6 +3725,26 @@ macros = [
     'macro' => '{$PROTECT.EVENT.WINDOW}',
     'value' => '10m',
     'description' => 'How long a recent Protect leak or tamper event remains in problem state.'
+  },
+  {
+    'macro' => '{$UNIFI.VOUCHER.MONITOR}',
+    'value' => '0',
+    'description' => 'Enable hotspot voucher alarms. Use a site-name context and value 1 only where vouchers are operationally required.'
+  },
+  {
+    'macro' => '{$UNIFI.VOUCHER.AVAILABLE.MIN}',
+    'value' => '10',
+    'description' => 'Minimum number of non-expired hotspot vouchers with remaining guest capacity.'
+  },
+  {
+    'macro' => '{$UNIFI.VOUCHER.EXPIRES.WARN}',
+    'value' => '24h',
+    'description' => 'Warning window for active hotspot vouchers approaching expiration.'
+  },
+  {
+    'macro' => '{$UNIFI.VOUCHER.USAGE.EVENT}',
+    'value' => '0',
+    'description' => 'Enable an informational event whenever total voucher guest authorizations increase.'
   }
 ]
 
@@ -3601,6 +3797,10 @@ template = {
     de Network e Protect sem repetir a mesma varredura em cada descoberta. O template gera
     alarmes somente quando a API fornece evidência.
 
+    Vouchers de hotspot são convertidos imediatamente em contadores agregados por site.
+    Códigos secretos, IDs e nomes dos vouchers são removidos no pré-processamento e nunca
+    são armazenados no histórico. Os alarmes de vouchers ficam desabilitados por padrão.
+
     Limites oficiais relevantes em 2026-09-03: o contrato Network 10.4.57 não publica
     BGP/OSPF, tabela de leases DHCP, VLAN operacional, PoE em watts, airtime, experiência
     ou Speedtest; o Protect 7.2.105 publica câmeras, sensores, Alarm Hubs e estado de
@@ -3612,7 +3812,8 @@ template = {
     Centralized monitoring through the official api.ui.com API. Asynchronous HTTP Agent items
     collect operational data while one reusable unified inventory feeds the Network/Protect
     JavaScript LLD rules without repeating the same API traversal. Unavailable capabilities
-    never produce a fabricated healthy value.
+    never produce a fabricated healthy value. Hotspot voucher responses are reduced to
+    sanitized per-site counters; secret codes, voucher IDs and names are never stored.
   DESC
   'vendor' => {'name' => 'Daniel Carvalho', 'version' => TEMPLATE_VERSION},
   'groups' => [{'name' => 'Templates/Applications'}],

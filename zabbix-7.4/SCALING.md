@@ -13,7 +13,7 @@ O número de itens não equivale ao número de chamadas externas. Itens dependen
 | Disponibilidade | `1m` | Site Manager, consoles, Network e Protect |
 | Estado | `2m` | sites, dispositivos, WANs, câmeras, sensores, Alarm Hubs e NVR |
 | Desempenho | `5m` | ISP, clientes, VPN, CPU, RAM e estatísticas |
-| Capacidade | `15m` | DHCP e armazenamento condicional |
+| Capacidade | `15m` | DHCP, vouchers e armazenamento condicional |
 | Configuração | `15m` | redes, Wi-Fi, ACL/firewall e auditoria |
 | Inventário | `1h` | sites, dispositivos, portas, Protect, WANs, subnets, SSIDs e rádios |
 
@@ -22,6 +22,8 @@ As onze LLDs suportadas pela API consomem o mesmo item `unifi.inventory.raw`. A 
 O Protect usa `unifi.protect.status.raw`: a cada dois minutos são feitas quatro consultas de lista por console Protect — câmeras, sensores, Alarm Hubs e NVR. Todos os itens descobertos reutilizam esse JSON; aumentar a quantidade de câmeras ou sensores não multiplica as chamadas operacionais.
 
 Network exige consultas individuais para detalhes e estatísticas de cada equipamento. Elas ficam na classe Desempenho (`5m`), enquanto disponibilidade de console, site e dispositivo usa os inventários globais de `1m`/`2m`. Assim uma conta grande pode aliviar CPU/RAM, portas e estatísticas sem atrasar os alarmes críticos.
+
+Vouchers acrescentam uma chamada HTTP por site Network a cada 15 minutos, não uma chamada por voucher. A resposta, limitada a 1000 registros, é reduzida imediatamente a contadores agregados e somente esse resumo sanitizado permanece no histórico. A criação de novos vouchers não aumenta a cardinalidade de itens. Sites que não usam hotspot ainda executam a consulta para manter descoberta automática, mas seus alarmes ficam desabilitados por padrão.
 
 Os itens mestre que carregam JSON guardam somente uma hora de histórico. Fontes calculadas que apenas transportam JSON usam histórico zero. Valores numéricos derivados guardam 30 dias de detalhe e 365 dias de trends. Estados estáveis sem alarme por sequência — versão, IP, modo, bateria e estados binários — descartam repetições e gravam apenas mudanças mais um heartbeat periódico. Itens usados para provar indisponibilidade por quatro coletas consecutivas não descartam amostras.
 
@@ -37,7 +39,7 @@ O Cloud Connector documenta limite de 100 requisições por minuto por console, 
 
 ## English
 
-Item count is not request count. Dependent items reuse a master value without another API call. The project separates availability (`1m`), state (`2m`), performance (`5m`), capacity/configuration (`15m`), and unified inventory (`1h`).
+Item count is not request count. Dependent items reuse a master value without another API call. The project separates availability (`1m`), state (`2m`), performance (`5m`), capacity/configuration (`15m`), and unified inventory (`1h`). Voucher monitoring adds one request per Network site every 15 minutes, regardless of voucher count, and stores only a sanitized aggregate summary.
 
 Eleven supported LLD rules reuse `unifi.inventory.raw`. Protect uses four consolidated list requests per console for cameras, sensors, Alarm Hubs, and NVR rather than one request per discovered entity. Raw JSON masters retain one hour, transport-only calculated items retain no history, and numeric derived data retains 30 days plus 365 days of trends.
 

@@ -130,6 +130,10 @@ required_macros = %w[
   {$PROTECT.SENSOR.BATTERY.MIN}
   {$PROTECT.SENSOR.SIGNAL.MIN}
   {$PROTECT.EVENT.WINDOW}
+  {$UNIFI.VOUCHER.MONITOR}
+  {$UNIFI.VOUCHER.AVAILABLE.MIN}
+  {$UNIFI.VOUCHER.EXPIRES.WARN}
+  {$UNIFI.VOUCHER.USAGE.EVENT}
 ]
 required_macros.each { |macro| check(macro_names.include?(macro), "missing macro #{macro}") }
 used_macros = source.scan(/\{\$[A-Z0-9._]+\}/).uniq
@@ -156,7 +160,11 @@ required_trigger_fragments = {
   'Recording mode changed' => 'WARNING',
   'Firewall/ACL rules changed' => 'WARNING',
   'VLAN changed' => 'WARNING',
-  'Firmware update available' => 'INFO'
+  'Firmware update available' => 'INFO',
+  'No hotspot vouchers available' => 'HIGH',
+  'Hotspot voucher stock is low' => 'AVERAGE',
+  'Active hotspot vouchers expire soon' => 'WARNING',
+  'New hotspot voucher batch detected' => 'INFO'
 }
 required_trigger_fragments.each do |fragment, priority|
   found = triggers.find { |trigger| trigger['name'].include?(fragment) }
@@ -193,6 +201,34 @@ device_offline_trigger = Array(device_online['trigger_prototypes']).find { |trig
 check(device_offline_trigger && device_offline_trigger['expression'].include?('#4') && device_offline_trigger['expression'].include?('=4'),
   'device-offline alert must require four consecutive two-minute samples')
 
+voucher_master = items.find { |item| item['key'] == 'unifi.site.vouchers.summary[{#NETWORK.SITE.ID}]' }
+check(voucher_master && voucher_master['type'] == 'HTTP_AGENT', 'sanitized hotspot voucher collector is missing')
+check(voucher_master['delay'] == '{$UNIFI.INTERVAL.CAPACITY}', 'voucher collector must use the capacity interval') if voucher_master
+check(voucher_master['url'].include?('/hotspot/vouchers?offset=0&limit=1000'), 'voucher collector must use the official paginated endpoint') if voucher_master
+voucher_js = Array(voucher_master && voucher_master['preprocessing']).map { |step| Array(step['parameters']).join("\n") }.join("\n")
+%w[authorizedGuestCount authorizedGuestLimit expiresAt totalCount].each do |field|
+  check(voucher_js.include?(field), "voucher sanitizer does not process #{field}")
+end
+check(voucher_js.include?('return JSON.stringify(summary)'), 'voucher HTTP response must be replaced by a sanitized summary')
+check(!voucher_js.match?(/voucher\s*\.\s*(code|id|name)\b/), 'voucher sanitizer must not read or retain voucher secrets/identifiers')
+
+required_voucher_keys = %w[
+  total unused activated available exhausted expired guest_uses_total
+  finite_remaining_uses unlimited_available expiring_soon truncated
+]
+required_voucher_keys.each do |suffix|
+  check(keys.include?("unifi.site.vouchers.#{suffix}[{#NETWORK.SITE.ID}]"), "missing voucher metric #{suffix}")
+end
+voucher_metrics = items.select { |item| item['key'].start_with?('unifi.site.vouchers.') && item['type'] == 'DEPENDENT' }
+voucher_metrics.each do |item|
+  check(item.dig('master_item', 'key') == voucher_master['key'], "#{item['key']} does not reuse the sanitized voucher master")
+end
+voucher_low_triggers = triggers.select { |candidate| candidate['name'].include?('voucher') && (candidate['name'].include?('stock') || candidate['name'].include?('No hotspot')) }
+voucher_low_triggers.each do |candidate|
+  check(candidate['expression'].include?('vouchers.truncated'), "#{candidate['name']} must be suppressed when the response is truncated")
+  check(candidate['expression'].include?('VOUCHER.MONITOR'), "#{candidate['name']} must be opt-in per site")
+end
+
 sequence_keys = %w[
   unifi.device.online[{#DEVICE.MAC}]
   unifi.protect.sensor.online[{#SENSOR.ID}]
@@ -225,6 +261,39 @@ if node
       _stdout, stderr, status = Open3.capture3(node, '--check', file.path)
       check(status.success?, "JavaScript syntax error in #{label}: #{stderr.strip}")
     end
+  end
+
+  runtime_voucher_js = voucher_js.gsub('{$UNIFI.VOUCHER.EXPIRES.WARN}', '24h')
+  Tempfile.create(['unifi-voucher-runtime-', '.js']) do |file|
+    file.write(<<~JS)
+      function zabbixVoucherCheck(value) {
+      #{runtime_voucher_js}
+      }
+      var now = Date.now();
+      var payload = {
+        totalCount: 4,
+        data: [
+          {code: 'SECRET-ONE', authorizedGuestCount: 0, authorizedGuestLimit: 1, expired: false},
+          {code: 'SECRET-TWO', authorizedGuestCount: 1, authorizedGuestLimit: 1, expired: false, activatedAt: new Date(now - 60000).toISOString(), expiresAt: new Date(now + 172800000).toISOString()},
+          {code: 'SECRET-THREE', authorizedGuestCount: 2, expired: false, activatedAt: new Date(now - 120000).toISOString(), expiresAt: new Date(now + 3600000).toISOString()},
+          {code: 'SECRET-FOUR', authorizedGuestCount: 1, authorizedGuestLimit: 1, expired: true, activatedAt: new Date(now - 180000).toISOString()}
+        ]
+      };
+      var serialized = zabbixVoucherCheck(JSON.stringify(payload));
+      var actual = JSON.parse(serialized);
+      var expected = {
+        total: 4, unused: 1, activated: 3, available: 2, exhausted: 1,
+        expired: 1, guest_uses_total: 4, finite_remaining_uses: 1,
+        unlimited_available: 1, expiring_soon: 1, truncated: 0
+      };
+      Object.keys(expected).forEach(function (key) {
+        if (actual[key] !== expected[key]) throw new Error(key + ': expected ' + expected[key] + ', got ' + actual[key]);
+      });
+      if (/SECRET-|\"code\"/.test(serialized)) throw new Error('voucher code leaked into sanitized summary');
+    JS
+    file.flush
+    _stdout, stderr, status = Open3.capture3(node, file.path)
+    check(status.success?, "voucher sanitizer runtime test failed: #{stderr.strip}")
   end
 end
 

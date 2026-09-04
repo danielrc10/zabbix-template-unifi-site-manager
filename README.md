@@ -15,7 +15,7 @@ Projeto API-first para monitoramento centralizado de contas UniFi no Zabbix por 
 
 | Zabbix | Estado | Arquivos |
 |---|---|---|
-| 7.4+ | Template principal `1.1.0` + SNMP Extension `1.0.0` | [Abrir versão 7.4](zabbix-7.4/README.md) |
+| 7.4+ | Template principal `1.2.0` + SNMP Extension `1.0.0` | [Abrir versão 7.4](zabbix-7.4/README.md) |
 
 O template diferencia dado oficial disponível, dado condicional e capacidade ainda ausente da API. Uma métrica ausente nunca é convertida em um falso estado saudável.
 
@@ -27,6 +27,6 @@ API-first Zabbix project for centralized UniFi monitoring through the official `
 
 | Zabbix | Status | Files |
 |---|---|---|
-| 7.4+ | Primary template `1.1.0` + SNMP Extension `1.0.0` | [Open version 7.4](zabbix-7.4/README.md#english) |
+| 7.4+ | Primary template `1.2.0` + SNMP Extension `1.0.0` | [Open version 7.4](zabbix-7.4/README.md#english) |
 
 The template distinguishes available official data, conditional fields, and capabilities not yet exposed by the API. A missing metric is never converted into a fabricated healthy state.
